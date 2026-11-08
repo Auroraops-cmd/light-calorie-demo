@@ -406,7 +406,14 @@ body {
       <div class="sm muted">当日总消耗</div>
       <div style="font-size:26px;font-weight:700;color:var(--water);"><span id="ex-total">0</span> <span class="sm muted" style="font-weight:400">kcal</span></div>
     </div>
-    <div class="sm muted" style="text-align:right;">消耗 = MET × 体重 × 时长</div>
+    <div class="sm muted" style="text-align:right;">消耗 = MET × 体重(kg) × 时长(h)<br>更新体重后历史记录自动重算</div>
+  </div>
+  <div class="card">
+    <div class="row-between">
+      <div class="section-title" style="margin-bottom:0;">🎯 本周运动目标</div>
+      <button class="btn btn-outline btn-sm" style="padding:7px 16px;" onclick="openExGoal()">调整</button>
+    </div>
+    <div id="ex-goal-body" style="margin-top:10px;"></div>
   </div>
   <div style="margin:0 12px 12px;" id="ex-list"></div>
   <div style="height:80px;"></div>
@@ -502,6 +509,11 @@ body {
     <div class="section-title">📉 热量收支曲线 <span class="sm muted">近 14 天</span></div>
     <div class="line-legend"><span><i style="background:var(--olive)"></i>摄入</span><span><i style="background:var(--water)"></i>运动消耗</span><span><i style="background:var(--warm-red)"></i>热量缺口</span></div>
     <div id="an-curve"></div>
+  </div>
+  <div class="card">
+    <div class="section-title">🏷 运动标签 <span class="sm muted">点标签筛选记录</span></div>
+    <div class="chip-grid" id="ex-tag-filter"></div>
+    <div id="ex-tag-records"></div>
   </div>
   <div class="card">
     <div class="row-between">
@@ -672,6 +684,8 @@ body {
   <div class="sheet" onclick="event.stopPropagation()">
     <div class="sheet-title">今天动了嘛？</div>
     <div class="sheet-item" onclick="openExType()"><span class="ico">🏋️</span><div><div class="lab">选择运动类型</div><div class="desc">按 MET 自动计算消耗</div></div></div>
+    <div class="sheet-item" onclick="openCustomMetEx()"><span class="ico">📝</span><div><div class="lab">自定义 MET 运动</div><div class="desc">居家跟练等，自填 MET 按时长计算</div></div></div>
+    <div class="sheet-item" onclick="openStepsImport()"><span class="ico">🚶</span><div><div class="lab">步数导入</div><div class="desc">一键把步数换算成走路消耗</div></div></div>
     <div class="sheet-item" onclick="openCustomEx()"><span class="ico">✏️</span><div><div class="lab">自定义消耗</div><div class="desc">手动输入运动名称与消耗</div></div></div>
     <div class="sheet-cancel" onclick="hide('sheet-ex-add')">取消</div>
   </div>
@@ -693,6 +707,8 @@ body {
     <div class="dialog-title" id="edx-name"></div>
     <div class="dialog-tip" id="edx-met"></div>
     <div class="form-row"><div class="form-label">运动时长（分钟）</div><input class="form-input" type="number" id="edx-duration" value="30" oninput="calcEst()"></div>
+    <div class="form-row"><div class="form-label">备注（可选）</div><input class="form-input" id="edx-note" placeholder="如：练腿 / 空腹 / 熬夜运动"></div>
+    <div class="form-row"><div class="form-label">标签（可多选，分析页可筛选）</div><div class="chip-grid" id="edx-tags" style="margin:0;"></div></div>
     <div class="est-box">预计消耗 <b id="edx-est">0</b> kcal</div>
     <div class="dialog-actions">
       <button class="btn btn-outline" onclick="hide('sheet-ex-duration')">取消</button>
@@ -721,6 +737,47 @@ body {
     <div class="dialog-tip">今日剩余可摄入 <b class="green" id="recipe-remain">0</b> kcal · 按「<span id="recipe-mode"></span>」推荐</div>
     <div class="scroll-list" id="recipe-list"></div>
     <div class="dialog-actions"><button class="btn btn-outline" onclick="hide('sheet-recipe')">关闭</button></div>
+  </div>
+</div>
+
+<!-- ===== 弹窗：自定义 MET 运动 ===== -->
+<div class="mask center" id="sheet-custom-met" onclick="hide('sheet-custom-met')">
+  <div class="dialog" onclick="event.stopPropagation()">
+    <div class="dialog-title">自定义 MET 运动 📝</div>
+    <div class="dialog-tip">MET 参考：跟练操 3~5 · 高强度间歇 7~8 · 保存后可收藏常用</div>
+    <div class="form-row"><div class="form-label">运动名称</div><input class="form-input" id="cme-name" placeholder="如：帕梅拉跟练"></div>
+    <div class="form-row"><div class="form-label">MET 值</div><input class="form-input" type="number" id="cme-met" placeholder="如：4.5"></div>
+    <div class="dialog-actions">
+      <button class="btn btn-outline" onclick="hide('sheet-custom-met')">取消</button>
+      <button class="btn btn-primary" onclick="addCustomMetEx()">保存并选时长</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 弹窗：步数导入 ===== -->
+<div class="mask center" id="sheet-steps" onclick="hide('sheet-steps')">
+  <div class="dialog" onclick="event.stopPropagation()">
+    <div class="dialog-title">步数换算 🚶</div>
+    <div class="form-row"><div class="form-label">今日步数</div><input class="form-input" type="number" id="steps-input" placeholder="如：8000" oninput="calcSteps()"></div>
+    <div class="est-box">约 <b id="steps-min">0</b> 分钟（按 100 步/分钟估算）</div>
+    <div class="dialog-actions">
+      <button class="btn btn-outline" onclick="addSteps(2.5,'散步')">记散步 <span id="steps-cal-walk">0</span> kcal</button>
+      <button class="btn btn-primary" onclick="addSteps(4.3,'快走')">记快走 <span id="steps-cal-fast">0</span> kcal</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 弹窗：运动目标 ===== -->
+<div class="mask center" id="sheet-ex-goal" onclick="hide('sheet-ex-goal')">
+  <div class="dialog" onclick="event.stopPropagation()">
+    <div class="dialog-title">每周运动目标 🎯</div>
+    <div class="dialog-tip" id="ex-goal-tip"></div>
+    <div class="form-row"><div class="form-label">每周次数</div><input class="form-input" type="number" id="goal-times"></div>
+    <div class="form-row"><div class="form-label">每周总时长（分钟）</div><input class="form-input" type="number" id="goal-minutes"></div>
+    <div class="dialog-actions">
+      <button class="btn btn-outline" onclick="hide('sheet-ex-goal')">取消</button>
+      <button class="btn btn-primary" onclick="saveExGoal()">保存</button>
+    </div>
   </div>
 </div>
 
@@ -758,7 +815,7 @@ const genId = () => Date.now().toString(36)+Math.random().toString(36).slice(2,8
 const r1 = n => Math.round(n*10)/10;
 
 /* ================= 存储 ================= */
-const KEYS = { profile:'kf_profile', mode:'kf_mode', food:'kf_food', ex:'kf_exercise', weight:'kf_weight', water:'kf_water', favs:'kf_favs', taboos:'kf_taboos', targetW:'kf_target_weight', fb:'kf_feedback', period:'kf_period', exFavs:'kf_ex_favs' };
+const KEYS = { profile:'kf_profile', mode:'kf_mode', food:'kf_food', ex:'kf_exercise', weight:'kf_weight', water:'kf_water', favs:'kf_favs', taboos:'kf_taboos', targetW:'kf_target_weight', fb:'kf_feedback', period:'kf_period', exFavs:'kf_ex_favs', customEx:'kf_custom_ex', exGoal:'kf_ex_goal' };
 const DEFAULT_PROFILE = { gender:'male', age:25, height:175, weight:70, activityLevel:'light' };
 function load(k, def){ try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : def; } catch(e){ return def; } }
 function save(k, v){ localStorage.setItem(k, JSON.stringify(v)); }
@@ -811,13 +868,14 @@ const FOOD_DB = [
 const foodCal = (f,amt)=>Math.round(f.calories*f.unitGram*amt/100);
 
 const EX_DB = [
-  ['e001','散步','有氧',2.5],['e002','快走','有氧',4.3],['e003','慢跑','有氧',7.0],['e004','跑步','有氧',9.8],['e005','骑行','有氧',6.8],['e006','游泳','有氧',8.0],['e007','跳绳','有氧',11.0],['e008','爬楼梯','有氧',8.8],['e009','爬山','有氧',6.0],['e010','椭圆机','有氧',5.0],
+  ['e001','散步','日常',2.5],['e002','快走','日常',4.3],['e003','慢跑','有氧',7.0],['e004','跑步','有氧',9.8],['e005','骑行','有氧',6.8],['e006','游泳','有氧',8.0],['e007','跳绳','有氧',11.0],['e008','爬楼梯','日常',8.8],['e009','爬山','有氧',6.0],['e010','椭圆机','有氧',5.0],
   ['e011','力量训练','力量',5.0],['e012','俯卧撑','力量',4.8],['e013','仰卧起坐','力量',3.8],['e014','引体向上','力量',6.0],['e015','哑铃训练','力量',5.0],
-  ['e016','瑜伽','柔韧',2.5],['e017','普拉提','柔韧',3.0],['e018','拉伸','柔韧',2.3],
+  ['e016','瑜伽','拉伸',2.5],['e017','普拉提','拉伸',3.0],['e018','拉伸放松','拉伸',2.3],
   ['e019','篮球','球类',6.5],['e020','足球','球类',7.0],['e021','羽毛球','球类',5.5],['e022','乒乓球','球类',4.0],['e023','网球','球类',7.3],
-  ['e024','跳舞','其他',5.0],['e025','家务','其他',2.5]
+  ['e024','跳舞','其他',5.0],['e025','家务','日常',2.5]
 ].map(([id,name,category,met])=>({id,name,category,met}));
-const EX_CATS = ['全部','有氧','力量','柔韧','球类','其他'];
+const EX_CATS = ['全部','有氧','力量','拉伸','球类','日常','其他'];
+const EX_CAT_ORDER = { slimming:['⭐常用','全部','有氧','日常','力量','球类','拉伸','其他'], health:['⭐常用','全部','有氧','力量','日常','拉伸','球类','其他'] };
 
 const MEALS = [['breakfast','早餐'],['lunch','午餐'],['dinner','晚餐'],['snack','加餐']];
 
@@ -1141,7 +1199,7 @@ function goTab(tab){
 }
 
 /* ================= 模式 ================= */
-function switchMode(m){ save(KEYS.mode, m); toast(m==='health'?'已切换健康模式 ✦':'已切换瘦身模式 ✦'); renderHome(); renderProfile(); renderWeightTarget(); if($('page-meal').classList.contains('active')) renderMeal(); }
+function switchMode(m){ save(KEYS.mode, m); toast(m==='health'?'已切换健康模式 ✦':'已切换瘦身模式 ✦'); renderHome(); renderProfile(); renderWeightTarget(); renderExGoal(); if($('page-meal').classList.contains('active')) renderMeal(); if($('page-exercise').classList.contains('active')) renderEx(); }
 
 /* ================= 弹窗基础 ================= */
 function openSheet(id){ $(id).classList.add('show'); }
@@ -1330,9 +1388,11 @@ function renderEx(){
       <div>
         <div class="name">${i.name}</div>
         <div class="meta">
-          <span class="tag ${i.source==='preset'?'tag-blue':'tag-gray'}">${i.source==='preset'?'预设':'自定义'}</span>
+          <span class="tag ${i.source==='custom'?'tag-gray':'tag-blue'}">${i.source==='preset'?'预设':i.source==='steps'?'步数':'自定义'}</span>
           ${i.duration?`<span>${i.duration} 分钟</span>`:''}
         </div>
+        ${i.tags&&i.tags.length?`<div style="margin-top:5px;">${i.tags.map(t=>`<span class="tag" style="font-size:10px;margin-right:4px;">${t}</span>`).join('')}</div>`:''}
+        ${i.note?`<div class="sm muted" style="margin-top:4px;">✎ ${i.note}</div>`:''}
       </div>
       <div class="right">
         <div class="cal blue">${i.calories}</div>
@@ -1340,6 +1400,7 @@ function renderEx(){
         <div class="ops"><span class="del" onclick="delEx('${i.id}')">删除</span></div>
       </div>
     </div>`).join('') : '<div class="empty">还没有运动记录 ✦</div>';
+  renderExGoal();
 }
 function delEx(id){
   if(!confirm('确定删除这条运动记录吗？')) return;
@@ -1359,25 +1420,29 @@ function addCustomEx(){
 }
 function openExType(){ hide('sheet-ex-add'); openSheet('sheet-ex-type'); renderExCats('全部'); }
 let curExCat='全部';
-const EX_TABS=['⭐常用',...EX_CATS];
 function renderExCats(cat){
   curExCat=cat;
-  $('ex-cats').innerHTML=EX_TABS.map(c=>`<div class="cat-tab ${c===cat?'active':''}" onclick="renderExCats('${c}')">${c}</div>`).join('');
-  let list = cat==='⭐常用' ? EX_DB.filter(e=>getExFavs().includes(e.id))
-    : (cat==='全部'?EX_DB:EX_DB.filter(e=>e.category===cat));
+  const tabs=EX_CAT_ORDER[getMode()]||EX_CATS;
+  $('ex-cats').innerHTML=tabs.map(c=>`<div class="cat-tab ${c===cat?'active':''}" onclick="renderExCats('${c}')">${c==='有氧'&&getMode()==='slimming'?'🔥有氧':c}</div>`).join('');
+  let list;
+  if(cat==='⭐常用') list=allEx().filter(e=>getExFavs().includes(e.id));
+  else if(cat==='全部') list=allEx();
+  else list=allEx().filter(e=>e.category===cat);
   $('ex-type-list').innerHTML=list.length?list.map(e=>`
     <div class="list-item" onclick="pickExercise('${e.id}')">
-      <div class="n">${e.name}</div>
+      <div class="n">${e.name}${e.category==='自定义'?'<span class="sm muted" style="margin-left:6px;">自建</span>':''}</div>
       <div class="m"><span class="tag tag-gray">${e.category}</span><span style="color:var(--water);font-size:13px;">MET ${e.met}</span></div>
       <span class="star ${getExFavs().includes(e.id)?'on':''}" onclick="toggleExFav(event,'${e.id}')">${getExFavs().includes(e.id)?'★':'☆'}</span>
-    </div>`).join(''):'<div class="empty">还没有常用运动，去其他分类点 ☆ 收藏吧</div>';
+    </div>`).join(''):(cat==='⭐常用'?'<div class="empty">还没有常用运动，去其他分类点 ☆ 收藏吧</div>':'<div class="empty">该分类暂无运动</div>');
 }
 function pickExercise(id){
-  selExercise=EX_DB.find(e=>e.id===id);
+  selExercise=allEx().find(e=>e.id===id);
+  if(!selExercise){ toast('该运动不存在'); return; }
   hide('sheet-ex-type');
   $('edx-name').textContent=selExercise.name;
-  $('edx-met').textContent='MET 值 '+selExercise.met+'，按体重自动计算';
-  $('edx-duration').value=30; calcEst();
+  $('edx-met').textContent='MET '+selExercise.met+' · 消耗 = MET × '+getProfile().weight+'kg × 时长(h)';
+  $('edx-duration').value=30; exTagSel=[]; renderExTagChips(); $('edx-note').value='';
+  calcEst();
   openSheet('sheet-ex-duration');
 }
 function calcEst(){
@@ -1387,9 +1452,97 @@ function calcEst(){
 function confirmExercise(){
   const min=+$('edx-duration').value;
   if(!min||min<=0){ toast('请输入有效时长'); return; }
-  addExRecord({id:genId(),name:selExercise.name,met:selExercise.met,duration:min,calories:exCal(selExercise.met,getProfile().weight,min),source:'preset'});
+  addExRecord({id:genId(),name:selExercise.name,met:selExercise.met,duration:min,calories:exCal(selExercise.met,getProfile().weight,min),source:selExercise.id.startsWith('c')?'custom':'preset',note:$('edx-note').value.trim(),tags:[...exTagSel]});
   hide('sheet-ex-duration'); toast('已添加运动记录 ✦');
 }
+
+/* ================= 运动进阶：自定义MET/备注标签/目标/步数/历史重算 ================= */
+const EX_TAG_PRESETS=['力量训练','练腿','空腹有氧','熬夜运动','户外','跟练'];
+let exTagSel=[], exTagFilter=null;
+const getCustomEx=()=>load(KEYS.customEx,[]);
+const allEx=()=>EX_DB.concat(getCustomEx());
+function renderExTagChips(){
+  const el=$('edx-tags'); if(!el) return;
+  el.innerHTML=EX_TAG_PRESETS.map(t=>`<span class="chip ${exTagSel.includes(t)?'on':''}" onclick="toggleExTagSel('${t}')">${t}</span>`).join('');
+}
+function toggleExTagSel(t){ const i=exTagSel.indexOf(t); if(i===-1) exTagSel.push(t); else exTagSel.splice(i,1); renderExTagChips(); }
+function openCustomMetEx(){ hide('sheet-ex-add'); $('cme-name').value=''; $('cme-met').value=''; openSheet('sheet-custom-met'); }
+function addCustomMetEx(){
+  const name=$('cme-name').value.trim(), met=+$('cme-met').value;
+  if(!name){ toast('请输入运动名称'); return; }
+  if(!met||met<=0||met>20){ toast('请输入有效 MET 值'); return; }
+  const list=getCustomEx(); const item={id:'c'+genId(),name,category:'自定义',met};
+  list.push(item); save(KEYS.customEx,list);
+  hide('sheet-custom-met'); toast('已保存，可直接选时长 ✦');
+  pickExercise(item.id);
+}
+function recalcExOnWeight(w){
+  const all=load(KEYS.ex,{});
+  Object.keys(all).forEach(d=>{ all[d]=(all[d]||[]).map(r=>{ if(r.met>0&&r.duration) r.calories=exCal(r.met,w,r.duration); return r; }); });
+  save(KEYS.ex,all);
+}
+const EX_GOAL_DEF={slimming:{times:5,minutes:150},health:{times:3,minutes:90}};
+const getExGoal=()=>load(KEYS.exGoal,null);
+function weekDates(){
+  const t=new Date(), dow=(t.getDay()+6)%7;
+  const d=new Date(); d.setDate(d.getDate()-dow);
+  const p=n=>String(n).padStart(2,'0');
+  const monStr=d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());
+  return Array.from({length:7},(_,i)=>addDays(monStr,i));
+}
+function weekExStats(){
+  let times=0,minutes=0;
+  weekDates().forEach(d=>getEx(d).forEach(r=>{ if(r.duration){ times++; minutes+=+r.duration||0; } }));
+  return {times,minutes};
+}
+function renderExGoal(){
+  const mode=getMode(), g=getExGoal()||EX_GOAL_DEF[mode];
+  const s=weekExStats();
+  const tp=Math.min(100,Math.round(s.times/g.times*100)), mp=Math.min(100,Math.round(s.minutes/g.minutes*100));
+  const done=s.times>=g.times&&s.minutes>=g.minutes;
+  $('ex-goal-body').innerHTML=`
+    <div class="progress-row"><span class="sm" style="width:96px;flex:none;">次数 ${s.times}/${g.times} 次</span><div class="p-bar"><div class="p-fill" style="width:${tp}%;background:var(--water);"></div></div></div>
+    <div class="progress-row"><span class="sm" style="width:96px;flex:none;">时长 ${s.minutes}/${g.minutes} 分</span><div class="p-bar"><div class="p-fill" style="width:${mp}%;background:var(--olive);"></div></div></div>
+    <div class="sm muted">${done?'🎉 本周目标已达成，太棒啦！':'按「'+(mode==='slimming'?'瘦身':'健康')+'」模式推荐，点右上角可调整'}</div>`;
+}
+function openExGoal(){
+  const mode=getMode(), g=getExGoal()||EX_GOAL_DEF[mode];
+  $('ex-goal-tip').textContent=mode==='slimming'?'瘦身模式推荐：每周 5 次 / 150 分钟（有氧为主）':'健康模式推荐：每周 3 次 / 90 分钟（均衡运动）';
+  $('goal-times').value=g.times; $('goal-minutes').value=g.minutes;
+  openSheet('sheet-ex-goal');
+}
+function saveExGoal(){
+  const t=+$('goal-times').value, m=+$('goal-minutes').value;
+  if(!t||t<=0||!m||m<=0){ toast('请输入有效目标'); return; }
+  save(KEYS.exGoal,{times:t,minutes:m});
+  hide('sheet-ex-goal'); renderExGoal(); toast('目标已保存 🎯');
+}
+function openStepsImport(){ hide('sheet-ex-add'); $('steps-input').value=''; calcSteps(); openSheet('sheet-steps'); }
+function calcSteps(){
+  const n=+$('steps-input').value||0, min=Math.round(n/100);
+  $('steps-min').textContent=min;
+  $('steps-cal-walk').textContent=exCal(2.5,getProfile().weight,min);
+  $('steps-cal-fast').textContent=exCal(4.3,getProfile().weight,min);
+}
+function addSteps(met,name){
+  const n=+$('steps-input').value||0;
+  if(!n||n<=0){ toast('请先输入步数'); return; }
+  const min=Math.round(n/100);
+  addExRecord({id:genId(),name,met,duration:min,calories:exCal(met,getProfile().weight,min),source:'steps',note:n+' 步',tags:[]});
+  hide('sheet-steps'); toast('已记录 '+name+' '+min+' 分钟 ✦');
+}
+function renderExTags(){
+  const all=load(KEYS.ex,{});
+  const cnt={};
+  Object.values(all).forEach(arr=>(arr||[]).forEach(r=>(r.tags||[]).forEach(t=>cnt[t]=(cnt[t]||0)+1)));
+  const tags=Object.keys(cnt);
+  $('ex-tag-filter').innerHTML=tags.length?tags.map(t=>`<span class="chip ${exTagFilter===t?'on':''}" onclick="filterExTag('${t}')">${t} ×${cnt[t]}</span>`).join(''):'<span class="sm muted">还没有标签，录运动时可以添加</span>';
+  if(!exTagFilter||!tags.includes(exTagFilter)){ $('ex-tag-records').innerHTML=''; return; }
+  const recs=[];
+  Object.keys(all).sort().reverse().forEach(d=>(all[d]||[]).forEach(r=>{ if((r.tags||[]).includes(exTagFilter)) recs.push({d,r}); }));
+  $('ex-tag-records').innerHTML=recs.length?recs.slice(0,20).map(({d,r})=>`<div class="report-row"><div class="l">${d.slice(5)} · ${r.name}${r.duration?' '+r.duration+'分钟':''}${r.note?' · ✎'+r.note:''}</div><div class="v" style="color:var(--water);">${r.calories} kcal</div></div>`).join(''):'<div class="empty">该标签暂无记录</div>';
+}
+function filterExTag(t){ exTagFilter=(exTagFilter===t)?null:t; renderExTags(); }
 
 /* ================= 体重 + 日历 ================= */
 let calY=new Date().getFullYear(), calM=new Date().getMonth(), selDate=today();
@@ -1451,7 +1604,10 @@ function saveWeight(){
   if(!w||w<=0){ toast('请输入有效体重'); return; }
   const all=getWeights(); all[selDate]=w; save(KEYS.weight,all);
   const p=getProfile(); p.weight=w; save(KEYS.profile,p);
-  hide('sheet-weight'); renderWeight(); toast('已保存 ✦');
+  recalcExOnWeight(w);
+  hide('sheet-weight'); renderWeight();
+  if($('page-exercise').classList.contains('active')) renderEx();
+  toast('已保存 ✦ 历史运动消耗已按新体重重算');
 }
 function delWeight(){
   const all=getWeights();
@@ -1514,7 +1670,7 @@ function renderAnalysis(){
       </svg>`;
   } else $('an-weightline').innerHTML='<div class="empty">体重记录不足 2 次，暂无曲线</div>';
   $('an-tip').style.display=(getProfile().gender==='female'&&nearPeriod(anDate))?'block':'none';
-  renderMacros(); renderCalCurve(); renderReport(reportRange);
+  renderMacros(); renderCalCurve(); renderReport(reportRange); renderExTags();
 }
 
 /* ================= 我的 ================= */
