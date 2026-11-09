@@ -72,9 +72,10 @@ body {
   background:linear-gradient(var(--bg) 82%, transparent); }
 
 /* 模式切换 */
-.mode-switch { display:flex; background:var(--card2); border:1.5px solid rgba(74,44,23,.16); border-radius:16px; padding:4px; }
-.mode-tab { flex:1; text-align:center; padding:10px 0; border-radius:12px; font-size:14px; color:var(--muted); cursor:pointer; }
-.mode-tab.active { background:var(--brown); color:var(--cream); font-weight:700; box-shadow:1.5px 2px 0 rgba(46,26,10,.3); }
+.mode-switch { display:flex; background:var(--card2); border:1.5px solid rgba(74,44,23,.16); border-radius:16px; padding:4px; position:relative; }
+.mode-tab { flex:1; text-align:center; padding:10px 0; border-radius:12px; font-size:14px; color:var(--muted); cursor:pointer; position:relative; z-index:1; transition:color .3s ease; }
+.mode-tab.active { color:var(--cream); font-weight:700; }
+.mode-slider { position:absolute; left:0; background:var(--brown); border-radius:12px; box-shadow:1.5px 2px 0 rgba(46,26,10,.3); pointer-events:none; transition:transform .32s cubic-bezier(.34,1.56,.64,1), width .32s cubic-bezier(.34,1.56,.64,1); }
 
 /* 首页圆环 */
 .ring-wrap { display:flex; flex-direction:column; align-items:center; }
@@ -285,6 +286,20 @@ body {
 @keyframes checkPop { 0%{transform:scale(.2);opacity:0;} 60%{transform:scale(1.12);opacity:1;} 100%{transform:scale(1);opacity:1;} }
 @keyframes checkOut { from{transform:scale(1);opacity:1;} to{transform:scale(1.06);opacity:0;} }
 @keyframes drawStroke { to { stroke-dashoffset:0; } }
+/* ===== 粒子庆祝（达标/掉秤/达成周目标） ===== */
+.cele { position:fixed; pointer-events:none; z-index:1200; animation:celeGo .65s ease-out forwards; will-change:transform,opacity; }
+@keyframes celeGo { 0%{transform:translate(0,0) rotate(0deg) scale(.6);opacity:.95;} 100%{transform:translate(var(--dx),var(--dy)) rotate(var(--rot)) scale(1);opacity:0;} }
+/* ===== 日历格子闪光 ===== */
+@keyframes calGlow { 0%{box-shadow:0 0 0 0 rgba(217,146,58,.55);} 100%{box-shadow:0 0 0 14px rgba(217,146,58,0);} }
+.cal-cell.cal-flash { animation:calGlow .65s ease-out; }
+/* ===== 模式切换面板淡入 ===== */
+.page-fade { animation:pageFade .35s ease-out; }
+@keyframes pageFade { from{opacity:.3;} to{opacity:1;} }
+/* ===== 卡片展开收起 ===== */
+.item { flex-wrap:wrap; cursor:pointer; }
+.item-detail { display:grid; grid-template-rows:0fr; opacity:0; transition:grid-template-rows .3s ease, opacity .3s ease; width:100%; }
+.item.open .item-detail { grid-template-rows:1fr; opacity:1; }
+.item-detail > div { overflow:hidden; }
 </style>
 </head>
 <body>
@@ -1132,6 +1147,7 @@ function reportStats(days){
 function renderReport(r){
   reportRange=r;
   document.querySelectorAll('#report-switch .mode-tab').forEach(el=>el.classList.toggle('active',el.dataset.r===r));
+  syncModeSliders();
   const days=r==='week'?7:30, s=reportStats(days);
   const rows=[
     ['记录天数',s.rec+' / '+s.days+' 天'],
@@ -1213,10 +1229,11 @@ function goTab(tab){
   if(tab==='weight') renderWeight();
   if(tab==='analysis') renderAnalysis();
   if(tab==='profile') renderProfile();
+  syncModeSliders();
 }
 
 /* ================= 模式 ================= */
-function switchMode(m){ save(KEYS.mode, m); toast(m==='health'?'已切换健康模式 ✦':'已切换瘦身模式 ✦'); renderHome(); renderProfile(); renderWeightTarget(); renderExGoal(); if($('page-meal').classList.contains('active')) renderMeal(); if($('page-exercise').classList.contains('active')) renderEx(); }
+function switchMode(m){ save(KEYS.mode, m); toast(m==='health'?'已切换健康模式 ✦':'已切换瘦身模式 ✦'); renderHome(); renderProfile(); renderWeightTarget(); renderExGoal(); syncModeSliders(); if($('page-meal').classList.contains('active')) renderMeal(); if($('page-exercise').classList.contains('active')) renderEx(); const pg=document.querySelector('.page.active'); if(pg){ pg.classList.remove('page-fade'); void pg.offsetWidth; pg.classList.add('page-fade'); } }
 
 /* ================= 弹窗基础 ================= */
 function openSheet(id){ $(id).classList.add('show'); }
@@ -1274,6 +1291,52 @@ function markCheckin(){
   save(k,true);
   showCheck('已打卡 · 连续 '+getStreak()+' 天 🔥');
 }
+/* ===== 粒子庆祝 ===== */
+let lastTap={x:innerWidth/2,y:innerHeight*0.72};
+document.addEventListener('pointerdown',e=>{ lastTap={x:e.clientX,y:e.clientY}; },true);
+function burstAt(x,y){
+  const colors=getMode()==='slimming'?['#d9923a','#c75b4a','#e8b04a','#f0c088']:['#7d9c5b','#7fa8c9','#a3c48a','#d9c37a'];
+  const n=6+Math.floor(Math.random()*5);
+  for(let i=0;i<n;i++){
+    const s=document.createElement('span'); s.className='cele';
+    if(Math.random()<0.35){
+      s.textContent='✦';
+      s.style.cssText=`left:${x}px;top:${y}px;font-size:${(9+Math.random()*7).toFixed(1)}px;color:${colors[i%colors.length]};line-height:1;`;
+    }else{
+      const sz=(4+Math.random()*4).toFixed(1);
+      s.style.cssText=`left:${x}px;top:${y}px;width:${sz}px;height:${sz}px;background:${colors[i%colors.length]};border-radius:50%;`;
+    }
+    s.style.setProperty('--dx',((Math.random()-.5)*76).toFixed(0)+'px');
+    s.style.setProperty('--dy',(-(28+Math.random()*54)).toFixed(0)+'px');
+    s.style.setProperty('--rot',((Math.random()-.5)*300).toFixed(0)+'deg');
+    document.body.appendChild(s);
+    setTimeout(()=>s.remove(),700);
+  }
+}
+/* ===== 日历格子闪光 ===== */
+function flashCalCell(){
+  const cell=document.querySelector('#cal-cells .cal-cell.sel');
+  if(!cell) return;
+  cell.classList.remove('cal-flash'); void cell.offsetWidth; cell.classList.add('cal-flash');
+  setTimeout(()=>cell.classList.remove('cal-flash'),700);
+}
+/* ===== 模式滑块同步 ===== */
+function syncModeSliders(){
+  document.querySelectorAll('.mode-switch').forEach(sw=>{
+    const act=sw.querySelector('.mode-tab.active'); if(!act) return;
+    let sl=sw.querySelector('.mode-slider');
+    if(!sl){ sl=document.createElement('div'); sl.className='mode-slider'; sl.style.transition='none'; sw.prepend(sl); }
+    sl.style.width=act.offsetWidth+'px';
+    sl.style.height=act.offsetHeight+'px';
+    sl.style.top=act.offsetTop+'px';
+    sl.style.transform='translateX('+act.offsetLeft+'px)';
+    if(sl.style.transition==='none'){ void sl.offsetWidth; sl.style.transition=''; }
+  });
+}
+window.addEventListener('resize',syncModeSliders);
+window.addEventListener('load',()=>setTimeout(syncModeSliders,300));
+/* ===== 卡片展开收起 ===== */
+function toggleItemDetail(el){ el.classList.toggle('open'); }
 
 /* ================= 首页 ================= */
 function renderHome(){
@@ -1294,6 +1357,7 @@ function renderHome(){
   $('water-ml').textContent=ml+' ml';
   // 模式按钮
   document.querySelectorAll('.mode-tab').forEach(t=>t.classList.toggle('active',t.dataset.mode===mode));
+  syncModeSliders();
   $('home-tip').textContent=(mode==='health'?'健康':'瘦身')+'模式下，每日推荐摄入 '+target+' kcal · 坚持记录，健康看得见 ✦';
   renderStreak();
 }
@@ -1322,9 +1386,11 @@ function renderMeal(){
   const mc=dayMacros(mealDate);
   $('meal-macros').textContent=`蛋白质 ${mc.p}g · 碳水 ${mc.c}g · 脂肪 ${mc.f}g`;
   $('recipe-hint').textContent=`今日剩余 ${Math.max(0,target-dayIntake(today()))} kcal · 已备好${getMode()==='slimming'?'低卡':'均衡'}食谱`;
-  $('meal-list').innerHTML = list.length ? list.map(i=>`
-    <div class="card item">
-      <div onclick="openEditFood('${i.id}')">
+  $('meal-list').innerHTML = list.length ? list.map(i=>{
+    const mc=(+i.p||+i.c||+i.f)?`蛋白质 ${Math.round(+i.p||0)}g · 碳水 ${Math.round(+i.c||0)}g · 脂肪 ${Math.round(+i.f||0)}g`:'暂无营养素明细';
+    return `
+    <div class="card item" onclick="toggleItemDetail(this)">
+      <div>
         <div class="name">${i.name}</div>
         <div class="meta">
           <span class="tag ${i.source==='ai'?'tag-blue':i.source==='manual'?'':'tag-gray'}">${i.source==='ai'?'AI识别':i.source==='manual'?'手动':'自定义'}</span>
@@ -1334,15 +1400,22 @@ function renderMeal(){
       <div class="right">
         <div class="cal" style="color:var(--brown)">${i.calories}</div>
         <div class="sm muted">kcal</div>
-        <div class="ops"><span class="edit" onclick="openEditFood('${i.id}')">修改</span><span class="del" onclick="delFood('${i.id}')">删除</span></div>
+        <div class="ops"><span class="edit" onclick="event.stopPropagation();openEditFood('${i.id}')">修改</span><span class="del" onclick="event.stopPropagation();delFood('${i.id}')">删除</span></div>
       </div>
-    </div>`).join('') : '<div class="empty">还没有记录，点击下方按钮添加吧 ✦</div>';
+      <div class="item-detail"><div>
+        <div class="sm muted" style="margin-top:8px;padding-top:8px;border-top:1.5px dashed rgba(74,44,23,.2);">${mc}</div>
+      </div></div>
+    </div>`;}).join('') : '<div class="empty">还没有记录，点击下方按钮添加吧 ✦</div>';
 }
 function setMeal(k){ activeMeal=k; renderMeal(); }
 function saveFoodItem(item){
   const all=load(KEYS.food,{}); if(!all[mealDate]) all[mealDate]={breakfast:[],lunch:[],dinner:[],snack:[]};
   all[mealDate][activeMeal].push(item); save(KEYS.food,all); renderMeal();
-  if(mealDate===today()) markCheckin();
+  if(mealDate===today()){
+    const tp=calcTarget(getProfile(),getMode()), ti=dayIntake(today());
+    if(ti>=tp*0.95&&ti<=tp*1.05&&!load('kf_cele_in_'+today(),false)){ save('kf_cele_in_'+today(),true); burstAt(lastTap.x,lastTap.y); }
+    markCheckin();
+  }
 }
 function delFood(id){
   if(!confirm('确定删除这条记录吗？')) return;
@@ -1450,8 +1523,10 @@ function renderEx(){
   $('ex-date-label').textContent=friendly(exDate); $('ex-date').textContent=exDate;
   roll($('ex-total'),dayBurn(exDate));
   const list=getEx(exDate);
-  $('ex-list').innerHTML = list.length ? list.map(i=>`
-    <div class="card item">
+  $('ex-list').innerHTML = list.length ? list.map(i=>{
+    const fx=i.met>0&&i.duration?`消耗公式：MET ${i.met} × 体重 ${getProfile().weight}kg × ${(i.duration/60).toFixed(1)}h ≈ ${i.calories} kcal`:'自定义录入 · 按固定消耗记录';
+    return `
+    <div class="card item" onclick="toggleItemDetail(this)">
       <div>
         <div class="name">${i.name}</div>
         <div class="meta">
@@ -1464,9 +1539,12 @@ function renderEx(){
       <div class="right">
         <div class="cal blue">${i.calories}</div>
         <div class="sm muted">kcal</div>
-        <div class="ops"><span class="del" onclick="delEx('${i.id}')">删除</span></div>
+        <div class="ops"><span class="del" onclick="event.stopPropagation();delEx('${i.id}')">删除</span></div>
       </div>
-    </div>`).join('') : '<div class="empty">还没有运动记录 ✦</div>';
+      <div class="item-detail"><div>
+        <div class="sm muted" style="margin-top:8px;padding-top:8px;border-top:1.5px dashed rgba(74,44,23,.2);">${fx}</div>
+      </div></div>
+    </div>`;}).join('') : '<div class="empty">还没有运动记录 ✦</div>';
   renderExGoal();
 }
 function delEx(id){
@@ -1475,7 +1553,12 @@ function delEx(id){
 }
 function addExRecord(rec){
   const all=load(KEYS.ex,{}); if(!Array.isArray(all[exDate])) all[exDate]=[];
+  const g=getExGoal()||EX_GOAL_DEF[getMode()], bs=weekExStats();
   all[exDate].push(rec); save(KEYS.ex,all); renderEx();
+  const as=weekExStats();
+  const was=bs.times>=g.times&&bs.minutes>=g.minutes, now=as.times>=g.times&&as.minutes>=g.minutes;
+  const wk='kf_cele_exg_'+weekDates()[0];
+  if(!was&&now&&!load(wk,false)){ save(wk,true); burstAt(lastTap.x,lastTap.y); }
   if(exDate===today()) markCheckin();
 }
 function openCustomEx(){ hide('sheet-ex-add'); openSheet('sheet-custom-ex'); }
@@ -1665,18 +1748,22 @@ function renderWeight(){
   } else ph.style.display='none';
   renderWeightTarget();
 }
-function pickDate(ds){ selDate=ds; const d=new Date(ds); calY=d.getFullYear(); calM=d.getMonth(); renderWeight(); }
+function pickDate(ds){ selDate=ds; const d=new Date(ds); calY=d.getFullYear(); calM=d.getMonth(); renderWeight(); flashCalCell(); }
 function openWeightInput(){ $('wt-date').textContent=selDate; $('wt-input').value=getWeights()[selDate]||''; openSheet('sheet-weight'); }
 function saveWeight(){
   const w=+$('wt-input').value;
   if(!w||w<=0){ toast('请输入有效体重'); return; }
-  const all=getWeights(); all[selDate]=w; save(KEYS.weight,all);
+  const before=getWeights();
+  const bd=Object.keys(before).sort();
+  const prevL=bd.length?before[bd[bd.length-1]]:null;
+  before[selDate]=w; save(KEYS.weight,before);
   const p=getProfile(); p.weight=w; save(KEYS.profile,p);
   recalcExOnWeight(w);
-  hide('sheet-weight'); renderWeight();
+  hide('sheet-weight'); renderWeight(); flashCalCell();
   if($('page-exercise').classList.contains('active')) renderEx();
   if(selDate===today()) markCheckin();
   toast('已保存 ✦ 历史运动消耗已按新体重重算');
+  if(prevL!==null&&w<prevL&&!load('kf_cele_w_'+today(),false)){ save('kf_cele_w_'+today(),true); burstAt(lastTap.x,lastTap.y); }
 }
 function delWeight(){
   const all=getWeights();
@@ -1746,6 +1833,7 @@ function renderAnalysis(){
 function renderProfile(){
   const p=getProfile(), mode=getMode();
   document.querySelectorAll('.mode-tab').forEach(t=>t.classList.toggle('active',t.dataset.mode===mode));
+  syncModeSliders();
   document.querySelectorAll('.gender-btn').forEach(b=>b.classList.toggle('active',b.dataset.g===p.gender));
   $('p-age').value=p.age; $('p-height').value=p.height; $('p-weight').value=p.weight;
   const bmi=calcBMI(p.weight,p.height), lv=bmiLevel(bmi);
