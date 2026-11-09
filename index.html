@@ -268,6 +268,23 @@ body {
 .report-row { display:flex; align-items:center; padding:10px 0; border-bottom:1.5px dashed rgba(74,44,23,.18); }
 .report-row .l { font-size:14px; color:var(--brown2); }
 .report-row .v { margin-left:auto; font-size:16px; font-weight:700; color:var(--brown); }
+/* ===== 微交互动效：按压回弹 ===== */
+.btn,.list-item,.cal-cell,.sheet-item,.cat-tab,.mode-tab,.chip,.date-arrow,.gender-btn,.tab-item,.backup-btn,.meal-tab,.star,.item .del,.item .edit { transition:transform .25s cubic-bezier(.34,1.56,.64,1); }
+.btn:active,.list-item:active,.cal-cell:active,.sheet-item:active,.cat-tab:active,.mode-tab:active,.chip:active,.date-arrow:active,.gender-btn:active,.tab-item:active,.backup-btn:active,.meal-tab:active,.star:active,.item .del:active,.item .edit:active { transform:scale(.92); transition:transform .18s ease-out; }
+.add-bar { transition:transform .25s cubic-bezier(.34,1.56,.64,1); }
+.add-bar:active { transform:translateX(-50%) scale(.92); transition:transform .18s ease-out; }
+/* ===== 水波纹 ===== */
+#page-meal .add-bar,#page-exercise .add-bar,#sheet-weight .btn-primary { position:relative; overflow:hidden; }
+.ripple-ink { position:absolute; border-radius:50%; pointer-events:none; background:radial-gradient(circle, rgba(125,156,91,.35) 0%, rgba(125,156,91,.18) 55%, rgba(125,156,91,0) 72%); transform:scale(0); animation:rippleGo .3s ease-out forwards; }
+@keyframes rippleGo { to { transform:scale(1); opacity:0; } }
+/* ===== 勾选成功动画 ===== */
+.check-pop { position:fixed; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; pointer-events:none; z-index:1000; }
+.check-pop svg { width:96px; height:96px; animation:checkPop .55s cubic-bezier(.34,1.56,.64,1) both; }
+.check-pop .sub { font-weight:700; color:#7d9c5b; font-size:14px; animation:checkPop .55s .15s cubic-bezier(.34,1.56,.64,1) both; }
+.check-pop.fade svg,.check-pop.fade .sub { animation:checkOut .3s ease-in both; }
+@keyframes checkPop { 0%{transform:scale(.2);opacity:0;} 60%{transform:scale(1.12);opacity:1;} 100%{transform:scale(1);opacity:1;} }
+@keyframes checkOut { from{transform:scale(1);opacity:1;} to{transform:scale(1.06);opacity:0;} }
+@keyframes drawStroke { to { stroke-dashoffset:0; } }
 </style>
 </head>
 <body>
@@ -425,7 +442,7 @@ body {
   <div class="page-head"><div class="hand-title">体重记录<span class="en">WEIGHT NOTE</span></div></div>
   <div class="card weight-hero">
     <div class="hero-row">
-      <div class="hero-item"><div class="lab">最新体重</div><div class="val" id="w-latest">—</div></div>
+      <div class="hero-item"><div class="lab">最新体重</div><div class="val"><span id="w-latest">—</span> <span class="sm" style="font-weight:400">kg</span></div></div>
       <div class="hero-item"><div class="lab">较上次</div><div class="val" id="w-change">—</div></div>
     </div>
     <div class="row-between" style="margin-top:14px;padding-top:12px;border-top:1.5px dashed rgba(251,243,228,.35);">
@@ -1209,6 +1226,55 @@ function toast(msg){ const t=document.createElement('div'); t.textContent=msg;
   t.style.cssText='position:fixed;top:60px;left:50%;transform:translateX(-50%);background:#46280f;color:#fbf3e4;padding:9px 20px;border-radius:20px;font-size:13px;z-index:999;transition:opacity .3s;border:2px solid #2e1a0a;box-shadow:0 3px 0 rgba(46,26,10,.3);white-space:nowrap;';
   document.body.appendChild(t); setTimeout(()=>t.style.opacity='0',1500); setTimeout(()=>t.remove(),1900); }
 
+/* ================= 微交互动效 ================= */
+function roll(el,to,dec=0){
+  if(!el) return;
+  const from=parseFloat(String(el.textContent).replace(/[^\d.\-]/g,''))||0;
+  if(from===to){ el.textContent=dec?Number(to).toFixed(dec):to; return; }
+  const t0=performance.now(),dur=500;
+  function step(t){
+    const k=Math.min(1,(t-t0)/dur), e=1-Math.pow(1-k,3), v=from+(to-from)*e;
+    el.textContent=dec?v.toFixed(dec):Math.round(v);
+    if(k<1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function rollSigned(el,to){
+  if(!el) return;
+  const from=parseFloat(el.textContent)||0;
+  if(from===to){ el.textContent=(to>=0?'+':'')+to; return; }
+  const t0=performance.now(),dur=500;
+  function step(t){
+    const k=Math.min(1,(t-t0)/dur), e=1-Math.pow(1-k,3), v=from+(to-from)*e;
+    el.textContent=(v>=0?'+':'')+Math.round(v);
+    if(k<1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+document.addEventListener('click',e=>{
+  const t=e.target.closest('#page-meal .add-bar,#page-exercise .add-bar,#sheet-weight .btn-primary');
+  if(!t) return;
+  const rect=t.getBoundingClientRect(), d=Math.max(rect.width,rect.height)*2.2;
+  const ink=document.createElement('span'); ink.className='ripple-ink';
+  ink.style.width=ink.style.height=d+'px';
+  ink.style.left=(e.clientX-rect.left-d/2)+'px';
+  ink.style.top=(e.clientY-rect.top-d/2)+'px';
+  t.appendChild(ink);
+  setTimeout(()=>ink.remove(),340);
+});
+function showCheck(sub){
+  const d=document.createElement('div'); d.className='check-pop';
+  d.innerHTML=`<svg viewBox="0 0 64 64"><circle cx="32" cy="32" r="29" fill="rgba(125,156,91,.10)" stroke="#7d9c5b" stroke-width="3" stroke-linecap="round" stroke-dasharray="183" stroke-dashoffset="183" style="animation:drawStroke .5s ease-out forwards"/><path d="M20 33 L28.5 41.5 L45 24" fill="none" stroke="#7d9c5b" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="40" stroke-dashoffset="40" style="animation:drawStroke .35s .28s ease-out forwards"/></svg>`+(sub?`<div class="sub">${sub}</div>`:'');
+  document.body.appendChild(d);
+  setTimeout(()=>{ d.classList.add('fade'); setTimeout(()=>d.remove(),320); },800);
+}
+function markCheckin(){
+  const k='kf_check_'+today();
+  if(load(k,false)) return;
+  save(k,true);
+  showCheck('已打卡 · 连续 '+getStreak()+' 天 🔥');
+}
+
 /* ================= 首页 ================= */
 function renderHome(){
   const mode=getMode(), p=getProfile(), target=calcTarget(p,mode);
@@ -1216,11 +1282,11 @@ function renderHome(){
   const pct=target>0?Math.min(100,Math.round(intake/target*100)):0;
   let status,sc; if(Math.abs(intake-target)<=target*0.05){status='达标';sc='#7d9c5b';} else if(intake>target){status='超标';sc='#c75b4a';} else {status='不足';sc='#d9923a';}
   $('ring').style.background=`conic-gradient(${sc} ${pct}%, #e8dcc4 0)`;
-  $('ring-intake').textContent=intake;
+  roll($('ring-intake'),intake);
   $('ring-target').textContent='目标 '+target+' kcal';
   const rs=$('ring-status'); rs.textContent=status; rs.style.color=sc;
-  $('home-intake').textContent=intake; $('home-burn').textContent=burn;
-  const hn=$('home-net'); hn.textContent=(net>=0?'+':'')+net; hn.className='val '+(net>=0?'orange':'green');
+  roll($('home-intake'),intake); roll($('home-burn'),burn);
+  const hn=$('home-net'); rollSigned(hn,net); hn.className='val '+(net>=0?'orange':'green');
   // 饮水
   const cups=getWater(today()), ml=cups*250;
   $('water-text').textContent=`${cups} / 8 杯`;
@@ -1251,7 +1317,7 @@ function renderMeal(){
   }).join('');
   const list=getFoods(mealDate)[activeMeal];
   const total=dayIntake(mealDate), p=getProfile(), target=calcTarget(p,getMode());
-  $('meal-total').textContent=total; $('meal-target').textContent=target;
+  roll($('meal-total'),total); $('meal-target').textContent=target;
   $('meal-remain').textContent='剩余 '+Math.max(0,target-total)+' kcal';
   const mc=dayMacros(mealDate);
   $('meal-macros').textContent=`蛋白质 ${mc.p}g · 碳水 ${mc.c}g · 脂肪 ${mc.f}g`;
@@ -1276,6 +1342,7 @@ function setMeal(k){ activeMeal=k; renderMeal(); }
 function saveFoodItem(item){
   const all=load(KEYS.food,{}); if(!all[mealDate]) all[mealDate]={breakfast:[],lunch:[],dinner:[],snack:[]};
   all[mealDate][activeMeal].push(item); save(KEYS.food,all); renderMeal();
+  if(mealDate===today()) markCheckin();
 }
 function delFood(id){
   if(!confirm('确定删除这条记录吗？')) return;
@@ -1381,7 +1448,7 @@ function exDay(n){ exDate=addDays(exDate,n); renderEx(); }
 function exToday(){ exDate=today(); renderEx(); }
 function renderEx(){
   $('ex-date-label').textContent=friendly(exDate); $('ex-date').textContent=exDate;
-  $('ex-total').textContent=dayBurn(exDate);
+  roll($('ex-total'),dayBurn(exDate));
   const list=getEx(exDate);
   $('ex-list').innerHTML = list.length ? list.map(i=>`
     <div class="card item">
@@ -1409,6 +1476,7 @@ function delEx(id){
 function addExRecord(rec){
   const all=load(KEYS.ex,{}); if(!Array.isArray(all[exDate])) all[exDate]=[];
   all[exDate].push(rec); save(KEYS.ex,all); renderEx();
+  if(exDate===today()) markCheckin();
 }
 function openCustomEx(){ hide('sheet-ex-add'); openSheet('sheet-custom-ex'); }
 function addCustomEx(){
@@ -1567,7 +1635,7 @@ function renderWeight(){
   $('cal-cells').innerHTML=html;
   if(dates.length){
     const ld=dates[dates.length-1], lw=weights[ld];
-    $('w-latest').innerHTML=lw+' <span class="sm" style="font-weight:400">kg</span>';
+    roll($('w-latest'),lw,1);
     if(dates.length>=2){
       const diff=r1(lw-weights[dates[dates.length-2]]);
       const wc=$('w-change'); wc.textContent=(diff>0?'+':'')+diff+' kg';
@@ -1607,6 +1675,7 @@ function saveWeight(){
   recalcExOnWeight(w);
   hide('sheet-weight'); renderWeight();
   if($('page-exercise').classList.contains('active')) renderEx();
+  if(selDate===today()) markCheckin();
   toast('已保存 ✦ 历史运动消耗已按新体重重算');
 }
 function delWeight(){
